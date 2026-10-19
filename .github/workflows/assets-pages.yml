@@ -1,0 +1,99 @@
+{
+  "name": "Publish allowlisted legacy assets to Pages — C2 CANDIDATE",
+  "on": {
+    "push": {
+      "branches": [
+        "main"
+      ],
+      "paths": [
+        "kolaji/full/**",
+        "slideshow/gallery.json",
+        "slideshow/slideshow.json",
+        "slideshow/slideshow-exclude.json",
+        "CNAME",
+        "tools/pages/**",
+        ".github/workflows/assets-pages.yml"
+      ]
+    },
+    "workflow_dispatch": {
+      "inputs": {
+        "publish": {
+          "type": "boolean",
+          "default": false,
+          "required": true,
+          "description": "Publish only after separately authorized Pages cutover"
+        }
+      }
+    }
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "concurrency": {
+    "group": "pages",
+    "cancel-in-progress": false
+  },
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "jobs": {
+    "build": {
+      "if": "github.repository == 'malin-bg/bgzona-assets' && github.ref == 'refs/heads/main'",
+      "runs-on": "ubuntu-24.04",
+      "timeout-minutes": 10,
+      "steps": [
+        {
+          "name": "Checkout exact workflow event",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false,
+            "fetch-depth": 1
+          }
+        },
+        {
+          "name": "Construct only allowlisted bytes from this fixed Git commit",
+          "shell": "bash",
+          "run": "set -euo pipefail\npython3 -B tools/pages/build_public.py build --source \"$GITHUB_WORKSPACE\" --git-commit \"$GITHUB_SHA\" --compat \"$GITHUB_WORKSPACE/tools/pages/compat-static\" --allowlist \"$GITHUB_WORKSPACE/tools/pages/public-files.json\" --compat-manifest \"$GITHUB_WORKSPACE/tools/pages/compat-manifest.json\" --output \"$RUNNER_TEMP/bgz-assets-public\" --manifest \"$RUNNER_TEMP/bgz-assets-manifest.json\""
+        },
+        {
+          "name": "Verify exact output immediately before upload",
+          "shell": "bash",
+          "run": "set -euo pipefail\nbgz_tree=\"$(python3 -c 'import json,os; print(json.load(open(os.environ[\"RUNNER_TEMP\"]+\"/bgz-assets-manifest.json\"))[\"tree_sha256\"])')\"\npython3 -B tools/pages/build_public.py verify --output \"$RUNNER_TEMP/bgz-assets-public\" --manifest \"$RUNNER_TEMP/bgz-assets-manifest.json\" --expected-tree \"$bgz_tree\""
+        },
+        {
+          "name": "Upload only the verified 51-file public directory",
+          "uses": "actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa",
+          "with": {
+            "name": "github-pages",
+            "path": "${{ runner.temp }}/bgz-assets-public",
+            "retention-days": 7
+          }
+        }
+      ]
+    },
+    "deploy": {
+      "needs": "build",
+      "if": "github.repository == 'malin-bg/bgzona-assets' && github.ref == 'refs/heads/main' && needs.build.result == 'success' && (github.event_name == 'push' || inputs.publish == true)",
+      "permissions": {
+        "pages": "write",
+        "id-token": "write"
+      },
+      "runs-on": "ubuntu-24.04",
+      "timeout-minutes": 10,
+      "environment": {
+        "name": "github-pages",
+        "url": "${{ steps.deployment.outputs.page_url }}"
+      },
+      "steps": [
+        {
+          "name": "Deploy this run verified output",
+          "id": "deployment",
+          "uses": "actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e",
+          "with": {
+            "artifact_name": "github-pages"
+          }
+        }
+      ]
+    }
+  }
+}

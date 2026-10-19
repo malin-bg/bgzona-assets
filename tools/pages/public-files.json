@@ -1,0 +1,210 @@
+{
+  "schema": 1,
+  "domain": "media.bgzona.win",
+  "files": [
+    {
+      "path": "assets/css/style.css",
+      "source": "compat"
+    },
+    {
+      "path": "index.html",
+      "source": "compat"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00001.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00002.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00003.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00004.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00005.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00006.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00007.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00008.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00009.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00010.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00011.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00012.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00013.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00014.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00015.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00016.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00017.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00018.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00019.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00020.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00021.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00022.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00023.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00024.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00025.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00026.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00027.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00028.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00029.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00030.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00031.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00032.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00033.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00034.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00035.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00036.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00037.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00038.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00039.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00040.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00041.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00042.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00043.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00044.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00045.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "kolaji/full/bgzona-p-00046.jpg",
+      "source": "repository"
+    },
+    {
+      "path": "slideshow/gallery.json",
+      "source": "repository"
+    },
+    {
+      "path": "slideshow/slideshow-exclude.json",
+      "source": "repository"
+    },
+    {
+      "path": "slideshow/slideshow.json",
+      "source": "repository"
+    }
+  ]
+}

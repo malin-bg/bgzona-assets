@@ -1,0 +1,12 @@
+[
+  {
+    "path": "assets/css/style.css",
+    "bytes": 76559,
+    "sha256": "38ec41b2a4c4765872f17ff3b131f560da97704113ee4f7dc884a643c8628fca"
+  },
+  {
+    "path": "index.html",
+    "bytes": 2517,
+    "sha256": "1f3b34a56979ef5a47fc581cccd0804a7dbc0b1732a4c5f0e2ea3a4ce73ac8a7"
+  }
+]
