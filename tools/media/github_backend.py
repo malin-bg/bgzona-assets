@@ -768,7 +768,8 @@ class Backend:
 
 # E4M: PRIVATE recovery storage only. Not an authority catalog, immutable backup,
 # public-media writer or permission to enable PROVIDER_REQUIRED.
-RECOVERY_REF = "refs/heads/automation-recovery"
+RECOVERY_BRANCH = "automation-recovery"
+RECOVERY_REF = "refs/heads/" + RECOVERY_BRANCH
 RECOVERY_MARKER = "private-recovery/identity.json"
 
 
@@ -826,6 +827,7 @@ class PrivateRecovery:
         self.repository,self.node_id,self.actor_id,self.code_oid=repository,node_id,actor_id,code_oid
         self.port,self.expected_head,self.writable,self.clock,self.ref=port,expected_head,writable,clock,ref
         self._attempted=set();self._claims={};self._lock=RLock()
+        self._phase="INITIALIZATION"
         self._gate()
 
     def _gate(self):
@@ -873,13 +875,16 @@ class PrivateRecovery:
             recovery_need(self.writable and type(raw) is bytes,"RECOVERY_SCOPE")
             # Reserve before possible I/O. Unknown/failed calls cannot be replayed.
             recovery_need(path not in self._attempted,"RECOVERY_CLAIMED")
+            claim=path.endswith("/claim.json")
+            self._phase="CHECKPOINT_READ_BEFORE_CLAIM" if claim else "REST_READ_BEFORE_CHECKPOINT"
             before=self.read(expected)
             recovery_need(path not in before["files"],"RECOVERY_CLAIMED")
             wanted=before["files"]|{path:raw};tree=recovery_tree(wanted)
-            variables={"input":{"branch":{"repositoryNameWithOwner":self.repository.name,"refName":self.ref},
+            variables={"input":{"branch":{"repositoryNameWithOwner":self.repository.name,"branchName":RECOVERY_BRANCH},
                 "expectedHeadOid":expected,"message":{"headline":"PRIVATE recovery checkpoint"},
                 "fileChanges":{"additions":[{"path":path,"contents":__import__('base64').b64encode(raw).decode('ascii')}]}}}
             self._gate();self._attempted.add(path)
+            self._phase="GRAPHQL_CLAIM" if claim else "GRAPHQL_CHECKPOINT"
             try:
                 reply=self.port.create_commit("mutation($input:CreateCommitOnBranchInput!){createCommitOnBranch(input:$input){commit{oid}}}",variables)
             except Exception:
@@ -894,6 +899,7 @@ class PrivateRecovery:
                 recovery_need(type(answer) is dict and set(answer)=={"commit"} and
                               type(answer["commit"]) is dict and set(answer["commit"])=={"oid"})
                 commit=answer["commit"]["oid"];recovery_need(oid(commit))
+                self._phase="CLAIM_READBACK" if claim else "CHECKPOINT_READBACK"
                 after=self.read(commit)
                 recovery_need(after["parents"]==[expected] and after["tree"]==tree and after["files"]==wanted)
                 self.expected_head=commit
@@ -912,6 +918,7 @@ class PrivateRecovery:
 
     def claim(self,request,record,packet_sha):
         import uuid
+        self._phase="CHECKPOINT_READ_BEFORE_CLAIM"
         slot=self._slot(request,record);before=self.read(self.expected_head)
         recovery_need(sha(packet_sha) and digest(before["files"].get(slot+"/checkpoint.json",b""))==packet_sha)
         raw=data({"packet":packet_sha,"claim":uuid.uuid4().hex})
@@ -920,6 +927,7 @@ class PrivateRecovery:
         self.verify_claim(request,record,packet_sha)
 
     def verify_claim(self,request,record,packet_sha):
+        self._phase="CLAIM_READBACK"
         slot=self._slot(request,record)
         recovery_need(slot in self._claims,"RECOVERY_CLAIMED")
         commit,raw=self._claims[slot];state=self.read(commit)
@@ -1042,7 +1050,7 @@ class PrivateRecoveryHTTP:
                       'RECOVERY_SCOPE')
         i=variables['input'];additions=i['fileChanges']['additions']
         recovery_need(set(i)=={'branch','expectedHeadOid','message','fileChanges'} and
-            i['branch']=={'repositoryNameWithOwner':self.pin.name,'refName':RECOVERY_REF} and oid(i['expectedHeadOid']) and
+            i['branch']=={'repositoryNameWithOwner':self.pin.name,'branchName':RECOVERY_BRANCH} and oid(i['expectedHeadOid']) and
             i['message']=={'headline':'PRIVATE recovery checkpoint'} and set(i['fileChanges'])=={'additions'} and
             len(additions)==1 and set(additions[0])=={'path','contents'},'RECOVERY_SCOPE')
         recovery_need(bool(re.fullmatch(r'private-recovery/[0-9a-f]{64}/[0-9a-f]{64}/(checkpoint|claim)\.json',additions[0]['path'])),

@@ -1357,7 +1357,10 @@ class RecoveryProvider:
             assert self.writable
             assert query=='mutation($input:CreateCommitOnBranchInput!){createCommitOnBranch(input:$input){commit{oid}}}'
             i=variables['input'];assert set(i)=={'branch','expectedHeadOid','message','fileChanges'}
-            assert i['branch']=={'repositoryNameWithOwner':gb.NAMES['intake'][0],'refName':gb.RECOVERY_REF}
+            if (set(i['branch'])!={'repositoryNameWithOwner','branchName'} or
+                i['branch']['repositoryNameWithOwner']!=gb.NAMES['intake'][0] or
+                i['branch']['branchName']!='automation-recovery' or self.mode=='schema_rejected'):
+                return gb.NativeReply(200,{'errors':[{'message':'Synthetic schema refusal '+SECRET}]})
             assert set(i['fileChanges'])=={'additions'} and len(i['fileChanges']['additions'])==1
             if self.mode=='unknown_before':raise TimeoutError(SECRET)
             if self.tip!=i['expectedHeadOid']:
@@ -1463,12 +1466,54 @@ class PrivateTests(unittest.TestCase):
 
     def test_private_HTTP_full_transport_intercepted(self):
         port,opener,requests,headers,broken=self.http_transport()
-        with patch.object(urllib.request,'build_opener',return_value=opener):
-            c=gb.PrivateRecovery(self.provider.pin,self.provider.node,self.provider.actor,self.provider.code,port,expected_head=self.provider.tip,writable=True)
-            c.persist(self.request,self.record,self.packet);c.claim(self.request,self.record,digest(self.packet))
+        root=self.provider.tip
+        with patch.object(urllib.request,'build_opener',return_value=opener), \
+             patch.object(self.provider,'create_commit',wraps=self.provider.create_commit) as create:
+            c=gb.PrivateRecovery(self.provider.pin,self.provider.node,self.provider.actor,self.provider.code,port,expected_head=root,writable=True)
+            checkpoint=c.persist(self.request,self.record,self.packet)
+            c.claim(self.request,self.record,digest(self.packet))
+            claim=self.provider.tip
+            self.assertEqual(c.expected_head,claim)
+            self.assertNotIn(claim,(root,checkpoint))
+            self.assertEqual(c.read(claim)['parents'],[checkpoint])
+            self.assertEqual(self.provider.rows[checkpoint]['parents'],[root])
             self.assertEqual(c.retrieve(self.request,self.record),self.packet)
+            inputs=[call.args[1]['input'] for call in create.call_args_list]
+            self.assertEqual([i['expectedHeadOid'] for i in inputs],[root,checkpoint])
+            self.assertEqual([i['branch'] for i in inputs],
+                             [{'repositoryNameWithOwner':self.provider.pin.name,'branchName':'automation-recovery'}]*2)
+            self.assertEqual([i['fileChanges']['additions'][0]['path'].rsplit('/',1)[1] for i in inputs],
+                             ['checkpoint.json','claim.json'])
         self.assertEqual(sum(method=='POST' for method,url in requests),2)
         self.assertTrue(all(url.endswith('/graphql') for method,url in requests if method=='POST'))
+    def test_private_HTTP_rejects_old_branch_shape(self):
+        port,opener,requests,headers,broken=self.http_transport()
+        query='mutation($input:CreateCommitOnBranchInput!){createCommitOnBranch(input:$input){commit{oid}}}'
+        i={'branch':{'repositoryNameWithOwner':self.provider.pin.name,'refName':gb.RECOVERY_REF},
+           'expectedHeadOid':self.provider.tip,'message':{'headline':'PRIVATE recovery checkpoint'},
+           'fileChanges':{'additions':[{'path':f'private-recovery/{self.request}/{self.record}/checkpoint.json',
+                                        'contents':'AA=='}]}}
+        with patch.object(urllib.request,'build_opener',return_value=opener):
+            with self.assertRaisesRegex(gb.RecoveryStop,'RECOVERY_SCOPE'):
+                port.create_commit(query,{'input':i})
+        self.assertEqual(requests,[])
+        self.assertEqual(set(self.provider.create_commit(query,{'input':i}).body),{'errors'})
+
+    def test_private_HTTP_schema_refusal_stops(self):
+        port,opener,requests,headers,broken=self.http_transport()
+        root=self.provider.tip;self.provider.mode='schema_rejected'
+        with patch.object(urllib.request,'build_opener',return_value=opener):
+            c=gb.PrivateRecovery(self.provider.pin,self.provider.node,self.provider.actor,self.provider.code,port,expected_head=root,writable=True)
+            with self.assertRaisesRegex(gb.RecoveryStop,'^RECOVERY_UNKNOWN$'):
+                c.persist(self.request,self.record,self.packet)
+            self.assertEqual(c._phase,'GRAPHQL_CHECKPOINT')
+            with self.assertRaisesRegex(gb.RecoveryStop,'RECOVERY_CLAIMED'):
+                c.persist(self.request,self.record,self.packet)
+        self.assertEqual(self.provider.tip,root)
+        self.assertEqual(c.expected_head,root)
+        self.assertEqual(self.provider.calls,1)
+        self.assertFalse(c._claims)
+
     def test_private_HTTP_forbidden_endpoint_no_io(self):
         port,opener,requests,headers,broken=self.http_transport()
         with patch.object(urllib.request,'build_opener',return_value=opener):
@@ -1600,6 +1645,20 @@ class PortableTests(unittest.TestCase):
 
 
 def private_cloud_probe(args):
+    from types import SimpleNamespace
+    diagnostic=SimpleNamespace(phase='INITIALIZATION',client=None)
+    try:
+        return _private_cloud_probe(args,diagnostic)
+    except Exception as exc:
+        phase=diagnostic.phase
+        if phase=='RECOVERY_WRITE':
+            phase=diagnostic.client._phase
+        code=gb.RecoveryStop(exc.code).code if type(exc) is gb.RecoveryStop else 'PROBE_ERROR'
+        print(json.dumps({'status':'PRIVATE_RECOVERY_STOP','phase':phase,'code':code}),flush=True)
+        return 1
+
+
+def _private_cloud_probe(args,diagnostic):
     """Future owner-gated SYNTHETIC probe only. No public mutation port exists."""
     import os,base64
     import authority_coordinator as d3
@@ -1619,6 +1678,7 @@ def private_cloud_probe(args):
         expected_head=required('BGZONA_RECOVERY_HEAD'),writable=args.private_cloud=='producer')
     WORK=external(args.work);assert not WORK.exists();WORK.mkdir(parents=True);h.WORK=WORK
     if args.private_cloud=='producer':
+        diagnostic.phase='SYNTHETIC_D3_INTENT'
         # Only genuine local synthetic D3 writes below. GitHub writes can reach
         # ONLY the designated PRIVATE checkpoint ref through the narrow client.
         original=subprocess.run
@@ -1636,18 +1696,21 @@ def private_cloud_probe(args):
                   'before':list(intent.before),'after':list(intent.after),'applied':False}
         # Storage and exclusive claim precede the simulated uncertain I/O window.
         envelope=data({'format':'bgzona-synthetic-driver-r1','packet':base64.b64encode(packet).decode(),'profile':spec})
+        diagnostic.client=client;diagnostic.phase="RECOVERY_WRITE"
         client.persist(intent.request_sha256,intent.record_sha256,envelope)
         client.claim(intent.request_sha256,intent.record_sha256,digest(envelope))
         client.verify_claim(intent.request_sha256,intent.record_sha256,digest(envelope))
+        diagnostic.phase='OUTPUTS'
         with Path(required('GITHUB_OUTPUT')).open('a',encoding='utf-8') as output:
             output.write('recovery_head='+client.expected_head+'\n')
             output.write('profile_sha='+digest(data(spec))+'\n')
             output.write('request='+intent.request_sha256+'\n')
             output.write('record='+intent.record_sha256+'\n')
         # Intentional real process termination; never send an authority mutation.
-        print(json.dumps({'status':'PRIVATE_CHECKPOINT_VERIFIED_SIMULATED_UNKNOWN','bytes':len(packet),'authority_mutations':0,'pid':os.getpid()}),flush=True)
+        print(json.dumps({'status':'PRIVATE_CHECKPOINT_VERIFIED_SIMULATED_UNKNOWN','phase':'CONTROLLED_EXIT_86','bytes':len(packet),'authority_mutations':0,'pid':os.getpid()}),flush=True)
         os._exit(86)
     else:
+        diagnostic.phase='RECOVERY_READBACK'
         request=required('BGZONA_RECOVERY_REQUEST');record=required('BGZONA_RECOVERY_RECORD')
         envelope=client.retrieve(request,record);row=json.loads(envelope)
         assert set(row)=={'format','packet','profile'} and row['format']=='bgzona-synthetic-driver-r1' and data(row)==envelope
@@ -1728,10 +1791,7 @@ def main():
     if args.restart_worker:return restart_worker(args)
     if args.private_worker:return private_restore_worker(args)
     if args.private_cloud_fixture:return private_cloud_fixture_worker(args)
-    if args.private_cloud:
-        try:return private_cloud_probe(args)
-        except Exception:
-            print('{"status":"PRIVATE_RECOVERY_STOP"}');return 1
+    if args.private_cloud:return private_cloud_probe(args)
     WORK=external(args.work)
     if WORK.exists():
         raise RuntimeError("NEW_EXTERNAL_WORK_REQUIRED")
